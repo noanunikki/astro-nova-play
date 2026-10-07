@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05040f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Neon Surge">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>NEON SURGE</title>
+<style>
+  :root {
+    --cyan: #35f0ff;
+    --mag: #ff3df0;
+    --yellow: #ffd24a;
+    --red: #ff3355;
+    --green: #3dff9a;
+    --violet: #b36bff;
+    --panel: rgba(8, 10, 28, 0.78);
+    --line: rgba(120, 220, 255, 0.35);
+    --font: 'Avenir Next Condensed', 'Bahnschrift', 'Rajdhani', 'Arial Narrow', 'Helvetica Neue', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #05040f; color: #e8f6ff; font-family: var(--font); cursor: default; }
+  canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  body.playing canvas#c { cursor: crosshair; }
+  #fxlayer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 2; }
+  .dmg { position: absolute; left: 0; top: 0; font-weight: 800; font-size: 17px; color: #fff; text-shadow: 0 0 6px #000, 0 0 10px rgba(53,240,255,.8); display: none; will-change: transform; letter-spacing: 1px; }
+  .dmg.crit { color: var(--yellow); font-size: 24px; text-shadow: 0 0 8px #000, 0 0 14px rgba(255,190,40,.9); }
+  .dmg.boss { color: #ffd0d0; }
+  .dmg.hurt { color: var(--red); font-size: 30px; text-shadow: 0 0 8px #000, 0 0 16px rgba(255,40,80,.9); }
+  .dmg.heal { color: var(--green); font-size: 22px; text-shadow: 0 0 8px #000, 0 0 14px rgba(60,255,150,.9); }
+  .dmg.xp { color: var(--cyan); font-size: 22px; }
+  .dmg.shield { color: #7be0ff; font-size: 24px; }
+  .dmg.big { font-size: 26px; }
+
+  .screen { position: fixed; inset: 0; z-index: 10; display: none; align-items: center; justify-content: center; flex-direction: column; }
+  .screen.show { display: flex; animation: fadeIn .35s ease both; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .dim { background: radial-gradient(ellipse at center, rgba(5,4,20,.55), rgba(3,2,12,.92)); }
+
+  /* ---------- Title ---------- */
+  #main { justify-content: center; align-items: flex-start; padding-left: 8vw; overflow-y: auto; background: linear-gradient(90deg, rgba(3,2,12,.85) 0%, rgba(3,2,12,.35) 45%, transparent 75%); }
+  .logo { font-size: clamp(48px, min(10vw, 13vh), 150px); font-weight: 900; line-height: .86; letter-spacing: 2px; text-transform: uppercase; font-style: italic;
+    background: linear-gradient(180deg, #fff 0%, var(--cyan) 45%, var(--mag) 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 18px rgba(53,240,255,.55)) drop-shadow(0 0 40px rgba(255,61,240,.35)); animation: logoPulse 3s ease-in-out infinite; }
+  .logo span { display: block; }
+  @keyframes logoPulse { 0%,100% { filter: drop-shadow(0 0 18px rgba(53,240,255,.55)) drop-shadow(0 0 40px rgba(255,61,240,.35)); } 50% { filter: drop-shadow(0 0 28px rgba(53,240,255,.85)) drop-shadow(0 0 60px rgba(255,61,240,.6)); } }
+  .tag { margin: 10px 0 18px; letter-spacing: 8px; font-size: clamp(11px, 1.3vw, 18px); color: var(--cyan); text-transform: uppercase; opacity: .85; }
+  /* main menu: Play on top, everything else in a compact two-column grid so every button fits on screen */
+  .menu-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; width: min(620px, 88vw); }
+  .menu-btns .btn.primary { grid-column: 1 / -1; padding: 16px 26px; font-size: 28px; }
+  .menu-btns .btn:not(.primary) { padding: 10px 16px; font-size: 16px; letter-spacing: 3px; }
+  .menu-btns .btn:not(.primary):hover, .menu-btns .btn:not(.primary):focus-visible { transform: translateX(5px); }
+  .menu-btns .btn .sub { font-size: 11px; letter-spacing: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .menu-btns [data-act] { order: 20; } /* buttons added by future packs go last; the explicit orders below come later and win */
+  .menu-btns [data-act="play"] { order: 0; } .menu-btns [data-act="coop"] { order: 1; } .menu-btns [data-act="ships"] { order: 2; } .menu-btns [data-act="shop"] { order: 3; }
+  .menu-btns [data-act="meta-hub"] { order: 4; } .menu-btns [data-act="stages-open"] { order: 5; } .menu-btns [data-act="fr_weekly_open"] { order: 6; } .menu-btns [data-act="rc-hub"] { order: 7; }
+  .menu-btns [data-act="relics"] { order: 8; } .menu-btns [data-act="records"] { order: 9; } .menu-btns [data-act="achievements"] { order: 10; } .menu-btns [data-act="settings"] { order: 11; } .menu-btns [data-act="howto"] { order: 12; }
+  .btn { position: relative; padding: 14px 22px; font-family: var(--font); font-size: 20px; font-weight: 800; letter-spacing: 4px; text-transform: uppercase; color: #dff8ff; background: linear-gradient(90deg, rgba(20,30,70,.85), rgba(10,14,40,.6));
+    border: 1px solid var(--line); border-left: 4px solid var(--cyan); cursor: pointer; text-align: left; transition: transform .12s, background .12s, box-shadow .12s, border-color .12s; clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%); }
+  .btn:hover, .btn:focus-visible { transform: translateX(10px); background: linear-gradient(90deg, rgba(53,240,255,.35), rgba(20,30,70,.6)); box-shadow: 0 0 24px rgba(53,240,255,.35); outline: none; border-color: #fff; }
+  .btn.primary { font-size: 30px; padding: 20px 26px; border-left-color: var(--mag); background: linear-gradient(90deg, rgba(255,61,240,.45), rgba(20,20,60,.7)); animation: btnPulse 2s ease-in-out infinite; }
+  .btn.primary:hover { background: linear-gradient(90deg, rgba(255,61,240,.8), rgba(60,20,90,.7)); box-shadow: 0 0 30px rgba(255,61,240,.6); }
+  @keyframes btnPulse { 0%,100% { box-shadow: 0 0 10px rgba(255,61,240,.3); } 50% { box-shadow: 0 0 26px rgba(255,61,240,.7); } }
+  .btn.small { font-size: 16px; padding: 10px 18px; letter-spacing: 3px; }
+  .btn.disabled { opacity: .45; cursor: not-allowed; }
+  .btn .sub { display: block; font-size: 12px; letter-spacing: 2px; opacity: .7; font-weight: 600; margin-top: 2px; }
+  .side-stats { position: absolute; right: 5vw; bottom: 6vh; text-align: right; font-size: 15px; letter-spacing: 3px; line-height: 1.9; color: #9fd8ee; text-transform: uppercase; text-shadow: 0 0 8px #000; }
+  .side-stats b { color: #fff; font-size: 20px; margin-left: 10px; }
+  .side-stats .cores { color: var(--yellow); }
+  .corner { position: absolute; left: 8vw; bottom: 4vh; font-size: 12px; letter-spacing: 3px; opacity: .55; text-transform: uppercase; }
+
+  /* ---------- Panels ---------- */
+  .panel { width: min(1080px, 94vw); max-height: 88vh; overflow: auto; background: var(--panel); border: 1px solid var(--line); padding: 26px 30px; backdrop-filter: blur(8px); box-shadow: 0 0 60px rgba(30,120,255,.15), inset 0 0 40px rgba(53,240,255,.05); }
+  .panel h2 { font-size: 34px; letter-spacing: 8px; text-transform: uppercase; font-style: italic; color: var(--cyan); text-shadow: 0 0 16px rgba(53,240,255,.6); margin-bottom: 6px; }
+  .panel .lead { color: #9fc4d8; letter-spacing: 2px; font-size: 14px; margin-bottom: 18px; text-transform: uppercase; }
+  .panel-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px; gap: 20px; flex-wrap: wrap; }
+  .cores-badge { font-size: 26px; font-weight: 800; color: var(--yellow); letter-spacing: 3px; text-shadow: 0 0 12px rgba(255,210,74,.6); }
+  .panel-foot { margin-top: 18px; display: flex; gap: 12px; justify-content: flex-end; position: sticky; bottom: -26px; padding: 12px 0 4px; background: linear-gradient(0deg, rgba(8,10,28,.98) 60%, transparent); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+  .card { position: relative; background: linear-gradient(160deg, rgba(20,30,70,.8), rgba(8,10,30,.85)); border: 1px solid var(--line); padding: 14px 16px 16px; cursor: pointer; transition: transform .12s, box-shadow .12s, border-color .12s; }
+  .card:hover { transform: translateY(-3px); border-color: var(--cyan); box-shadow: 0 0 24px rgba(53,240,255,.3); }
+  .card .ico { font-size: 30px; line-height: 1; margin-bottom: 6px; }
+  .card .nm { font-size: 19px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; }
+  .card .ds { font-size: 14px; color: #a9c6d8; margin: 5px 0 8px; min-height: 36px; }
+  .card .lv { display: flex; gap: 3px; margin-bottom: 8px; }
+  .card .lv i { flex: 1; height: 6px; background: rgba(255,255,255,.12); }
+  .card .lv i.on { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+  .card .cost { font-weight: 800; letter-spacing: 2px; color: var(--yellow); }
+  .card.maxed { opacity: .65; cursor: default; }
+  .card.maxed .cost { color: var(--green); }
+  .card.cant .cost { color: #ff6b83; }
+  .card.selected { border-color: var(--mag); box-shadow: 0 0 26px rgba(255,61,240,.45); }
+  .shipdot { width: 54px; height: 54px; border-radius: 50%; margin-bottom: 8px; box-shadow: 0 0 24px currentColor; border: 2px solid currentColor; display:flex; align-items:center; justify-content:center; font-size: 26px; }
+
+  .setting { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 12px 0; border-bottom: 1px solid rgba(120,220,255,.14); font-size: 18px; letter-spacing: 3px; text-transform: uppercase; }
+  .setting input[type=range] { width: 260px; accent-color: var(--cyan); }
+  .setting select { background: #0c1230; color: #fff; border: 1px solid var(--line); padding: 8px 12px; font-family: var(--font); font-size: 16px; letter-spacing: 2px; }
+  .howto { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 40px; font-size: 17px; line-height: 1.5; color: #cfe8f5; }
+  .howto h3 { color: var(--mag); letter-spacing: 4px; text-transform: uppercase; margin-bottom: 4px; font-size: 18px; }
+  kbd { display: inline-block; min-width: 26px; text-align: center; padding: 1px 8px; border: 1px solid var(--cyan); border-radius: 4px; color: var(--cyan); font-family: inherit; font-weight: 800; margin: 0 2px; background: rgba(53,240,255,.08); }
+
+  .grid.modes { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+  .card.mode .ico { font-size: 34px; color: var(--cyan); text-shadow: 0 0 14px currentColor; }
+  .card.mode .tagline { font-size: 11px; letter-spacing: 3px; color: var(--mag); font-weight: 800; margin: 2px 0 4px; }
+  .card.mode .ds { min-height: 86px; font-size: 13px; }
+  .card.mode.selected .ico { color: var(--mag); }
+  .subh { margin-top: 18px; color: var(--mag); letter-spacing: 6px; text-transform: uppercase; font-size: 18px; }
+  .chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .chip { position: relative; padding: 10px 14px; background: rgba(12,18,48,.8); border: 1px solid var(--line); cursor: pointer; transition: all .12s; }
+  .chip b { display: block; letter-spacing: 2px; text-transform: uppercase; font-size: 15px; }
+  .chip span { display: block; font-size: 12px; color: #a9c6d8; margin: 3px 0; }
+  .chip em { font-style: normal; font-size: 11px; letter-spacing: 2px; color: var(--yellow); font-weight: 800; }
+  .chip:hover { border-color: var(--cyan); }
+  .chip.on { border-color: var(--mag); background: rgba(255,61,240,.16); box-shadow: 0 0 16px rgba(255,61,240,.35); }
+  .chip.locked { cursor: default; opacity: .55; } .chip.locked.on { opacity: 1; }
+  #modelbl { position: absolute; left: 50%; top: 74px; transform: translateX(-50%); font-size: 12px; letter-spacing: 5px; color: var(--mag); font-weight: 800; text-shadow: 0 0 8px #000; white-space: nowrap; }
+  #bossbar { top: 96px !important; }
+
+  .chips.tabs { margin-bottom: 12px; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  .chips.tabs .chip { text-align: center; padding: 8px; }
+  .board { width: 100%; border-collapse: collapse; font-size: 15px; letter-spacing: 1px; }
+  .board th { text-align: left; color: var(--mag); letter-spacing: 3px; font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--line); text-transform: uppercase; }
+  .board td { padding: 6px 8px; border-bottom: 1px solid rgba(120,220,255,.1); font-variant-numeric: tabular-nums; }
+  .board tr.new td { color: var(--yellow); }
+  .board td.rk { color: var(--cyan); font-weight: 800; width: 40px; }
+  .results.small { margin: 8px 0 0; width: auto; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+  .results.small .res .v { font-size: 22px; }
+  .card.ach { cursor: default; }
+  .card.ach.done { border-color: var(--green); }
+  .card.ach.done .nm { color: var(--green); }
+  .card.ach:not(.done) { opacity: .7; }
+  .card.ach .bar2 { height: 5px; background: rgba(255,255,255,.12); margin: 6px 0; } .card.ach .bar2 i { display: block; height: 100%; background: var(--cyan); }
+  .chip small { display: block; margin-top: 4px; color: var(--yellow); font-size: 11px; letter-spacing: 2px; }
+  .chip.lockedarena { opacity: .45; cursor: not-allowed; }
+  #abilitypips .pip i { background: var(--mag); box-shadow: 0 0 8px var(--mag); }
+  #abilitypips .pip { width: 90px; } #abilitypips .pip.ready { box-shadow: 0 0 12px var(--mag); }
+  #abilitypips label.ready { color: #fff; opacity: 1; text-shadow: 0 0 8px var(--mag); }
+  #achbanner { position: fixed; right: 20px; top: 150px; z-index: 40; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+  .achpop { background: linear-gradient(90deg, rgba(255,210,74,.3), rgba(8,10,30,.92)); border: 1px solid var(--yellow); border-left: 5px solid var(--yellow); padding: 10px 16px; min-width: 260px; animation: achIn .5s ease both, achOut .5s ease 4s forwards; box-shadow: 0 0 24px rgba(255,210,74,.35); }
+  .achpop b { display: block; font-size: 11px; letter-spacing: 4px; color: var(--yellow); } .achpop span { font-size: 19px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; } .achpop em { display: block; font-style: normal; font-size: 13px; color: #bcd; }
+  @keyframes achIn { from { transform: translateX(120%); opacity: 0; } to { transform: none; opacity: 1; } } @keyframes achOut { to { transform: translateX(120%); opacity: 0; } }
+  .padfocus { outline: 3px solid var(--mag) !important; box-shadow: 0 0 24px var(--mag) !important; }
+  .choice.evo { --rc: #fff2a8; background: linear-gradient(170deg, rgba(70,56,10,.95), rgba(20,16,6,.97)); animation: cardIn .45s cubic-bezier(.2,1.4,.4,1) both, evoGlow 1.4s ease-in-out infinite alternate; }
+  @keyframes evoGlow { from { box-shadow: 0 0 22px #ffd24a; } to { box-shadow: 0 0 56px #fff2a8, 0 0 12px #ff3df0; } }
+  .choice.pact { --rc: #ff3df0; background: linear-gradient(170deg, rgba(60,10,56,.95), rgba(14,6,20,.97)); }
+  .btn.tiny { padding: 8px 16px; font-size: 14px; }
+  .menu-btns .btn { padding: 11px 22px; font-size: 18px; } .menu-btns .btn.primary { padding: 18px 26px; }
+
+  @media (max-width: 800px) { .howto { grid-template-columns: 1fr; } #main { padding-left: 6vw; } }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; display: none; }
+  #hud.show { display: block; }
+  .hud-tl { position: absolute; left: 22px; top: 40px; width: min(360px, 40vw); }
+  .bar { position: relative; height: 22px; background: rgba(5,8,25,.75); border: 1px solid var(--line); clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%); overflow: hidden; }
+  .bar > i { position: absolute; left: 0; top: 0; bottom: 0; transition: width .12s linear; }
+  #hpfill { background: linear-gradient(90deg, #ff2d55, #ff6b3d); box-shadow: 0 0 14px rgba(255,60,80,.7); }
+  #hpghost { background: rgba(255,255,255,.55); transition: width .6s ease .15s; }
+  .bar span { position: absolute; left: 12px; top: 0; bottom: 0; display: flex; align-items: center; font-weight: 800; font-size: 14px; letter-spacing: 2px; text-shadow: 0 1px 3px #000; }
+  .pips { display: flex; gap: 6px; margin-top: 8px; align-items: center; height: 16px; }
+  .pip { width: 34px; height: 8px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2); position: relative; overflow: hidden; transform: skewX(-20deg); }
+  .pip i { position: absolute; inset: 0; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); transform-origin: left; }
+  .pips label { font-size: 11px; letter-spacing: 2px; opacity: .7; margin-right: 6px; text-transform: uppercase; }
+  .shieldpip { width: 14px; height: 14px; border: 2px solid #55ccff; border-radius: 50%; box-shadow: 0 0 8px #55ccff; }
+  .shieldpip.off { opacity: .2; box-shadow: none; }
+
+  #xpwrap { position: absolute; left: 0; right: 0; top: 0; height: 12px; background: rgba(5,8,25,.7); border-bottom: 1px solid var(--line); }
+  #xpfill { height: 100%; width: 0; background: linear-gradient(90deg, #1b7bff, var(--cyan), #b5fbff); box-shadow: 0 0 14px var(--cyan); transition: width .15s; }
+  #lvl { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); font-size: 13px; letter-spacing: 5px; color: var(--cyan); text-shadow: 0 0 8px #000; font-weight: 800; }
+  #timer { position: absolute; left: 50%; top: 30px; transform: translateX(-50%); font-size: 40px; font-weight: 900; letter-spacing: 4px; text-shadow: 0 0 16px rgba(53,240,255,.7), 0 2px 4px #000; font-variant-numeric: tabular-nums; }
+  #timer.boss { color: var(--red); text-shadow: 0 0 18px rgba(255,50,80,.9); }
+  .hud-tr { position: absolute; right: 24px; top: 40px; text-align: right; }
+  #score { font-size: 36px; font-weight: 900; letter-spacing: 3px; font-variant-numeric: tabular-nums; text-shadow: 0 0 12px rgba(255,61,240,.6), 0 2px 4px #000; }
+  #kills { font-size: 15px; letter-spacing: 4px; color: #9fd8ee; text-transform: uppercase; }
+  #combo { margin-top: 10px; opacity: 0; transition: opacity .2s; }
+  #combo.on { opacity: 1; }
+  #combo .n { font-size: 44px; font-weight: 900; font-style: italic; color: var(--yellow); text-shadow: 0 0 16px rgba(255,190,40,.8), 0 2px 4px #000; line-height: 1; }
+  #combo .n small { font-size: 18px; letter-spacing: 3px; color: #fff; margin-left: 6px; }
+  #combo .m { font-size: 14px; letter-spacing: 3px; color: var(--mag); font-weight: 800; }
+  #combo .t { height: 4px; width: 160px; background: rgba(255,255,255,.15); margin: 4px 0 0 auto; }
+  #combo .t i { display: block; height: 100%; background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+  #combo.pop .n { animation: pop .18s ease; }
+  @keyframes pop { 0% { transform: scale(1.35); } 100% { transform: scale(1); } }
+
+  .hud-bc { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); text-align: center; width: min(460px, 60vw); }
+  #ultbar { height: 18px; }
+  #ultfill { background: linear-gradient(90deg, #7a3dff, var(--mag)); box-shadow: 0 0 14px rgba(255,61,240,.7); }
+  #ultbar.ready { animation: ultReady .7s ease-in-out infinite; border-color: #fff; }
+  #ultbar.ready #ultfill { background: linear-gradient(90deg, #fff, var(--mag), #fff); }
+  @keyframes ultReady { 0%,100% { box-shadow: 0 0 10px rgba(255,61,240,.5); } 50% { box-shadow: 0 0 34px rgba(255,61,240,1); } }
+  #ultlbl { font-size: 13px; letter-spacing: 5px; margin-bottom: 4px; color: #e8b6ff; font-weight: 800; text-transform: uppercase; }
+  #ultlbl.ready { color: #fff; text-shadow: 0 0 10px var(--mag); }
+
+  .hud-bl { position: absolute; left: 22px; top: 118px; display: flex; flex-wrap: wrap; gap: 6px; max-width: min(360px, 40vw); }
+  .wchip { min-width: 54px; padding: 4px 10px 6px; background: rgba(6,10,30,.75); border: 1px solid var(--line); text-align: center; }
+  .wchip .i { font-size: 22px; line-height: 1.1; }
+  .wchip .l { font-size: 11px; letter-spacing: 2px; font-weight: 800; color: var(--cyan); }
+  .wchip.evo { border-color: #ffd24a; box-shadow: 0 0 12px rgba(255,210,74,.6); } .wchip.evo .l { color: #ffd24a; }
+  .wchip.pas { opacity: .8; min-width: 40px; padding: 2px 6px; }
+  .wchip.pas .i { font-size: 16px; }
+
+  #radar { position: absolute; right: 22px; bottom: 22px; width: 150px; height: 150px; border-radius: 50%; background: rgba(4,8,26,.55); border: 1px solid var(--line); box-shadow: 0 0 20px rgba(53,240,255,.15); }
+
+  #bossbar { position: absolute; left: 50%; top: 84px; transform: translateX(-50%); width: min(620px, 70vw); text-align: center; display: none; }
+  #bossbar.show { display: block; animation: fadeIn .4s; }
+  #bossname { font-size: 20px; letter-spacing: 10px; font-weight: 900; color: #ffb3c0; margin-bottom: 4px; text-shadow: 0 0 14px rgba(255,50,80,.8); }
+  #bossfill { background: linear-gradient(90deg, #ff2244, #ff8a3d); box-shadow: 0 0 16px rgba(255,60,80,.8); }
+  #bossbar .bar { height: 18px; border-color: rgba(255,120,140,.6); }
+
+  #announce { position: absolute; left: 0; right: 0; top: 24%; text-align: center; pointer-events: none; opacity: 0; }
+  #announce .a1 { font-size: clamp(38px, 7vw, 92px); font-weight: 900; letter-spacing: 12px; font-style: italic; text-transform: uppercase; text-shadow: 0 0 24px currentColor, 0 4px 10px #000; }
+  #announce .a2 { font-size: clamp(14px, 1.8vw, 24px); letter-spacing: 8px; text-transform: uppercase; opacity: .9; margin-top: 6px; text-shadow: 0 2px 6px #000; }
+  #announce.show { animation: announce var(--dur, 2.5s) ease both; }
+  @keyframes announce { 0% { opacity: 0; transform: scale(1.6); letter-spacing: 30px; } 10% { opacity: 1; transform: scale(1); letter-spacing: 12px; } 85% { opacity: 1; } 100% { opacity: 0; transform: scale(.96); } }
+  #announce.warn { color: var(--yellow); } #announce.danger { color: var(--red); } #announce.boss { color: #ff5c7a; } #announce.elite { color: #ffd24a; } #announce.good { color: var(--green); } #announce.info { color: var(--cyan); } #announce.combo { color: var(--mag); }
+
+  #toast { position: fixed; left: 50%; bottom: 18%; transform: translateX(-50%); z-index: 30; padding: 10px 22px; background: var(--panel); border: 1px solid var(--line); letter-spacing: 3px; font-weight: 800; display: none; text-transform: uppercase; }
+  #toast.show { display: block; animation: fadeIn .2s; }
+
+  /* ---------- Level up ---------- */
+  #levelup h1 { font-size: 52px; font-style: italic; font-weight: 900; letter-spacing: 12px; text-transform: uppercase; color: var(--cyan); text-shadow: 0 0 26px rgba(53,240,255,.8); margin-bottom: 4px; animation: lvlIn .5s ease both; }
+  #levelup h1.boss { color: var(--yellow); text-shadow: 0 0 26px rgba(255,210,74,.8); }
+  #levelup .sub { letter-spacing: 6px; color: #9fc4d8; margin-bottom: 28px; text-transform: uppercase; font-size: 15px; }
+  @keyframes lvlIn { from { transform: scale(1.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .choices { display: flex; gap: 22px; justify-content: center; flex-wrap: wrap; padding: 0 20px; }
+  .choice { width: 260px; min-height: 340px; padding: 22px 20px; background: linear-gradient(170deg, rgba(20,28,70,.92), rgba(8,8,26,.95)); border: 2px solid var(--rc, var(--line)); position: relative; cursor: pointer; text-align: center; transition: transform .14s, box-shadow .14s; animation: cardIn .45s cubic-bezier(.2,1.4,.4,1) both; box-shadow: 0 0 22px color-mix(in srgb, var(--rc, #35f0ff) 35%, transparent); }
+  .choice:nth-child(2) { animation-delay: .07s; } .choice:nth-child(3) { animation-delay: .14s; } .choice:nth-child(4) { animation-delay: .21s; }
+  @keyframes cardIn { from { transform: translateY(60px) scale(.85); opacity: 0; } to { transform: none; opacity: 1; } }
+  .choice:hover, .choice.hot { transform: translateY(-10px) scale(1.04); box-shadow: 0 0 50px var(--rc, #35f0ff); }
+  .choice .key { position: absolute; left: 10px; top: 8px; font-size: 13px; letter-spacing: 2px; opacity: .6; font-weight: 800; }
+  .choice .rar { position: absolute; right: 12px; top: 8px; font-size: 11px; letter-spacing: 3px; font-weight: 800; color: var(--rc); }
+  .choice .ico { font-size: 64px; margin: 22px 0 10px; text-shadow: 0 0 24px var(--rc); color: var(--rc); line-height: 1.1; }
+  .choice .nm { font-size: 23px; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 4px; }
+  .choice .kind { font-size: 12px; letter-spacing: 4px; color: var(--rc); margin-bottom: 14px; font-weight: 800; }
+  .choice .ds { font-size: 17px; color: #c8e2f0; line-height: 1.35; }
+  .choice .lv { margin-top: 16px; display: flex; gap: 4px; justify-content: center; }
+  .choice .lv i { width: 20px; height: 6px; background: rgba(255,255,255,.14); }
+  .choice .lv i.on { background: var(--rc); box-shadow: 0 0 8px var(--rc); }
+  .choice .lv i.nx { background: #fff; animation: blink .6s infinite alternate; }
+  @keyframes blink { to { opacity: .25; } }
+  .choice.common { --rc: #7ee0ff; } .choice.rare { --rc: #b36bff; } .choice.epic { --rc: #ffd24a; } .choice.weapon { --rc: #ff5cf0; } .choice.misc { --rc: #3dff9a; }
+  .lu-foot { margin-top: 26px; display: flex; gap: 14px; }
+
+  /* ---------- Game over ---------- */
+  #gameover h1, #victory h1 { font-size: clamp(50px, 8vw, 110px); font-style: italic; font-weight: 900; letter-spacing: 12px; text-transform: uppercase; color: var(--red); text-shadow: 0 0 30px rgba(255,50,80,.8); animation: lvlIn .6s ease both; line-height: 1; }
+  #victory h1 { color: var(--green); text-shadow: 0 0 30px rgba(60,255,150,.8); }
+  .results { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 26px 0 16px; width: min(900px, 92vw); }
+  .res { background: var(--panel); border: 1px solid var(--line); padding: 12px 16px; text-align: center; animation: cardIn .5s both; }
+  .res .k { font-size: 12px; letter-spacing: 4px; color: #86b8d0; text-transform: uppercase; }
+  .res .v { font-size: 32px; font-weight: 900; letter-spacing: 2px; font-variant-numeric: tabular-nums; }
+  .res.rec .v { color: var(--yellow); text-shadow: 0 0 12px rgba(255,210,74,.7); }
+  .earn { font-size: 30px; font-weight: 900; letter-spacing: 6px; color: var(--yellow); text-shadow: 0 0 20px rgba(255,210,74,.7); margin: 6px 0 18px; text-align: center; }
+  .earn small { display: block; font-size: 13px; color: #b9a56a; letter-spacing: 3px; font-weight: 600; }
+  .row-btns { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+  .row-btns .btn { text-align: center; }
+
+  #pause h1 { font-size: 64px; letter-spacing: 16px; font-style: italic; font-weight: 900; color: var(--cyan); margin-bottom: 22px; text-shadow: 0 0 24px rgba(53,240,255,.7); }
+  #loading { position: fixed; inset: 0; z-index: 100; background: #05040f; display: flex; align-items: center; justify-content: center; letter-spacing: 10px; font-size: 22px; color: var(--cyan); transition: opacity .6s; }
+  #loading.done { opacity: 0; pointer-events: none; }
+  #fatal { position: fixed; left: 20px; bottom: 20px; z-index: 200; color: #ff8fa0; background: rgba(0,0,0,.8); padding: 10px 14px; max-width: 70vw; font-family: monospace; font-size: 12px; display: none; user-select: text; -webkit-user-select: text; }
+  /* ---------- Mobile / small screens ---------- */
+  html, body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+  body.touch { position: fixed; inset: 0; touch-action: none; }
+  body:not(.touch) .touchonly { display: none; }
+  body.touch .nocodes { display: none !important; }
+  .setting input[type=checkbox] { width: 26px; height: 26px; accent-color: var(--cyan); }
+  @media (max-height: 520px) {
+    #main { padding-left: max(5vw, env(safe-area-inset-left)); }
+    .logo { font-size: clamp(36px, 14vh, 84px); }
+    .tag { margin: 4px 0 10px; letter-spacing: 4px; font-size: 10px; }
+    #main { overflow-y: auto; justify-content: center; }
+    .logo { font-size: clamp(30px, 11vh, 64px); line-height: 1; } .logo span { display: inline; margin-right: .25em; }
+    .tag { display: none; }
+    .menu-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 8px; width: min(560px, 64vw); }
+    .menu-btns .btn.primary { grid-column: 1 / -1; }
+    .menu-btns .btn { clip-path: none; }
+    .menu-btns .btn { padding: 7px 16px; font-size: 14px; letter-spacing: 3px; }
+    .menu-btns .btn.primary { font-size: 20px; padding: 10px 18px; }
+    .btn .sub { display: none; }
+    .side-stats, .corner { display: none; }
+    .panel { padding: 12px 18px; max-height: 94vh; }
+    .panel h2 { font-size: 20px; letter-spacing: 5px; margin-bottom: 2px; }
+    .panel .lead { margin-bottom: 8px; font-size: 11px; }
+    .cores-badge { font-size: 18px; }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    .grid.modes { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+    .card { padding: 8px 10px 10px; } .card .ico { font-size: 22px; } .card .nm { font-size: 14px; } .card .ds { font-size: 11px; min-height: 0; margin: 3px 0; }
+    .card.mode .ds { min-height: 0; font-size: 11px; }
+    .chips { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; } .chip { padding: 6px 10px; } .chip b { font-size: 12px; } .chip span { font-size: 10px; }
+    .subh { margin-top: 10px; font-size: 14px; }
+    .setting { padding: 6px 0; font-size: 13px; }
+    .panel-foot { margin-top: 8px; }
+    .howto { font-size: 13px; gap: 8px 22px; }
+    #levelup h1 { font-size: 28px; letter-spacing: 6px; margin-bottom: 0; }
+    #levelup .sub { margin-bottom: 8px; font-size: 11px; letter-spacing: 3px; }
+    .choices { gap: 10px; flex-wrap: nowrap; }
+    .choice { width: min(27vw, 230px); min-height: 0; padding: 10px 10px 12px; }
+    .choice .ico { font-size: 34px; margin: 8px 0 2px; } .choice .nm { font-size: 15px; letter-spacing: 1px; } .choice .kind { margin-bottom: 6px; font-size: 10px; }
+    .choice .ds { font-size: 12px; } .choice .key { display: none; } .choice .lv { margin-top: 8px; }
+    .lu-foot { margin-top: 10px; }
+    .results { margin: 10px 0 6px; gap: 6px; } .res { padding: 6px 8px; } .res .v { font-size: 20px; } .res .k { font-size: 9px; letter-spacing: 2px; }
+    #gameover h1, #victory h1 { font-size: 40px; } .earn { font-size: 20px; margin: 2px 0 8px; }
+    #pause h1 { font-size: 38px; margin-bottom: 10px; }
+    /* HUD */
+    #lvl { top: 11px; font-size: 10px; } #timer { top: 20px; font-size: 24px; }
+    .hud-tl { top: 26px; left: max(12px, env(safe-area-inset-left)); width: min(240px, 34vw); }
+    .bar { height: 15px; } .bar span { font-size: 11px; }
+    .pips { margin-top: 5px; height: 12px; } .pip { width: 26px; height: 6px; } #abilitypips .pip { width: 60px; }
+    .hud-tr { top: 26px; right: max(66px, env(safe-area-inset-right) + 54px); }
+    #score { font-size: 22px; } #kills { font-size: 11px; } #combo { margin-top: 2px; } #combo .n { font-size: 26px; } #combo .n small { font-size: 11px; } #combo .m { font-size: 10px; } #combo .t { width: 100px; }
+    .hud-bc { bottom: 6px; width: min(240px, 30vw); } #ultlbl { font-size: 9px; letter-spacing: 2px; margin-bottom: 2px; } #ultbar { height: 10px; }
+    .hud-bl { display: none; }
+    #radar { width: 82px; height: 82px; left: max(12px, env(safe-area-inset-left)); top: 112px; right: auto; bottom: auto; }
+    #bossbar { top: 54px; width: min(420px, 50vw); } #bossname { font-size: 12px; letter-spacing: 6px; } #bossbar .bar { height: 12px; }
+    #announce { top: 18%; } #announce .a1 { font-size: clamp(24px, 9vh, 52px); letter-spacing: 6px; } #announce .a2 { font-size: 11px; letter-spacing: 4px; }
+    .dmg { font-size: 13px; } .dmg.crit { font-size: 17px; } .dmg.hurt, .dmg.big { font-size: 20px; }
+    #toast { bottom: 26%; font-size: 12px; padding: 6px 12px; }
+    #achbanner { top: 70px; right: 12px; } .achpop { min-width: 190px; padding: 6px 10px; } .achpop span { font-size: 14px; }
+  }
+  /* touch devices: menus and panels are scaled down with CSS zoom (not the level-up cards or HUD) */
+  body.touch .screen:not(#levelup) > * { zoom: var(--uiz, 0.72); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="fxlayer"></div>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="xpwrap"><div id="xpfill"></div></div>
+  <div id="lvl">LV 1</div>
+  <div id="timer">0:00</div>
+  <div id="modelbl"></div>
+  <div class="hud-tl">
+    <div class="bar"><i id="hpghost"></i><i id="hpfill"></i><span id="hptxt">100 / 100</span></div>
+    <div class="pips" id="dashpips"></div>
+    <div class="pips" id="abilitypips"></div>
+    <div class="pips" id="shieldpips"></div>
+  </div>
+  <div class="hud-tr">
+    <div id="score">0</div>
+    <div id="kills">0 kills</div>
+    <div id="combo"><div class="n">0<small>COMBO</small></div><div class="m">x1.0 SCORE</div><div class="t"><i></i></div></div>
+  </div>
+  <div id="bossbar"><div id="bossname">BOSS</div><div class="bar"><i id="bossfill" style="width:100%"></i></div></div>
+  <div id="announce"><div class="a1"></div><div class="a2"></div></div>
+  <div class="hud-bc">
+    <div id="ultlbl">OVERLOAD</div>
+    <div class="bar" id="ultbar"><i id="ultfill" style="width:0"></i></div>
+  </div>
+  <div class="hud-bl" id="weapons"></div>
+  <canvas id="radar" width="300" height="300"></canvas>
+</div>
+
+<!-- Main menu -->
+<div id="main" class="screen">
+  <div class="logo"><span>Neon</span><span>Surge</span></div>
+  <div class="tag">Survive · Evolve · Overload</div>
+  <div class="menu-btns">
+    <button class="btn primary" data-act="play">Play</button>
+    <button class="btn" data-act="ships">Ship <span class="sub" id="shipname"></span></button>
+    <button class="btn" data-act="shop">Upgrades <span class="sub" id="shopsub"></span></button>
+    <button class="btn" data-act="records">Records <span class="sub" id="recsub"></span></button>
+    <button class="btn" data-act="achievements">Achievements <span class="sub" id="achsub"></span></button>
+    <button class="btn" data-act="settings">Settings</button>
+    <button class="btn" data-act="howto">How to play</button>
+  </div>
+  <div class="side-stats" id="sidestats"></div>
+  <div class="corner">WASD move · Mouse aim · Space dash · E overload</div>
+</div>
+
+<div id="modes" class="screen dim"><div class="panel">
+  <div class="panel-head"><h2>Choose your mode</h2></div>
+  <div class="lead">Every mode earns Cores. Harder settings pay more.</div>
+  <div class="grid modes" id="modegrid"></div>
+  <h3 class="subh">Arena</h3>
+  <div class="chips" id="arenagrid"></div>
+  <h3 class="subh">Mutators</h3>
+  <div class="lead" id="mutlead"></div>
+  <div class="chips" id="mutgrid"></div>
+  <div class="panel-foot"><button class="btn small" data-act="back">Back</button><button class="btn primary small" data-act="start" id="startlbl">Start</button></div>
+</div></div>
+
+<div id="achievements" class="screen dim"><div class="panel">
+  <div class="panel-head"><h2>Achievements</h2><div class="cores-badge" id="ach-count"></div></div>
+  <div class="lead">Complete challenges for bonus Cores and to unlock new arenas.</div>
+  <div class="grid" id="achgrid"></div>
+  <div class="panel-foot"><button class="btn small" data-act="back">Back</button></div>
+</div></div>
+
+<div id="records" class="screen dim"><div class="panel">
+  <div class="panel-head"><h2>Records</h2><div class="cores-badge" id="rec-stats"></div></div>
+  <div class="chips tabs" id="rectabs"></div>
+  <table class="board" id="board"></table>
+  <h3 class="subh">Lifetime</h3>
+  <div class="results small" id="lifetime"></div>
+  <div class="panel-foot"><button class="btn small" data-act="back">Back</button></div>
+</div></div>
+
+<div id="ships" class="screen dim"><div class="panel">
+  <div class="panel-head"><h2>Choose your ship</h2><div class="cores-badge" id="ships-cores"></div></div>
+  <div class="lead">Each ship changes how a run plays. Unlock new ships with Cores.</div>
+  <div class="grid" id="shipgrid"></div>
+  <div class="panel-foot"><button class="btn small" data-act="back">Back</button></div>
+</div></div>
+
+<div id="shop" class="screen dim"><div class="panel">
+  <div class="panel-head"><h2>Permanent upgrades</h2><div class="cores-badge" id="shop-cores"></div></div>
+  <div class="lead">Spend Cores earned from runs. These stay forever.</div>
+  <div class="grid" id="shopgrid"></div>
+  <h3 class="subh">Armory</h3>
+  <div class="lead">Unlock extra weapons so they can appear in level-up choices.</div>
+  <div class="grid" id="armorygrid"></div>
+  <div class="panel-foot"><button class="btn small" data-act="back">Back</button></div>
+</div></div>
+
+<div id="settings" class="screen dim"><div class="panel" style="width:min(720px,94vw)">
+  <div class="panel-head"><h2>Settings</h2></div>
+  <div class="setting"><span>Music</span><input type="range" id="set-music" min="0" max="1" step="0.05"></div>
+  <div class="setting"><span>Sound effects</span><input type="range" id="set-sfx" min="0" max="1" step="0.05"></div>
+  <div class="setting"><span>Move sensitivity</span><input type="range" id="set-movesens" min="0.3" max="1.6" step="0.05"></div>
+  <div class="setting"><span>Aim sensitivity</span><input type="range" id="set-aimsens" min="0.1" max="1" step="0.05"></div>
+  <div class="setting"><span>Screen shake</span><input type="range" id="set-shake" min="0" max="1" step="0.05"></div>
+  <div class="setting"><span>Effects intensity</span><input type="range" id="set-effects" min="0.35" max="1" step="0.05"></div>
+  <div class="setting"><span>Reduce flashes &amp; motion</span><input type="checkbox" id="set-reduceflash"></div>
+  <div class="setting"><span>Damage numbers</span><input type="checkbox" id="set-dmgnum"></div>
+  <div class="setting"><span>Bloom</span><input type="range" id="set-bloom" min="0" max="1.5" step="0.05"></div>
+  <div class="setting"><span>Difficulty</span><select id="set-difficulty"><option value="0">Chill</option><option value="1">Normal</option><option value="2">Brutal (+35% cores)</option></select></div>
+  <div class="setting touchonly"><span>Menu size</span><input type="range" id="set-uisize" min="0.45" max="1.1" step="0.03"></div>
+  <div class="setting touchonly"><span>Touch control size</span><input type="range" id="set-touchsize" min="0.6" max="1.8" step="0.05"></div>
+  <div class="setting touchonly"><span>Aiming</span><select id="set-touchaim"><option value="manual">Manual (aim stick)</option><option value="follow">Follow movement</option><option value="auto">Auto-aim (assist)</option></select></div>
+  <div class="setting touchonly"><span>Touch control opacity</span><input type="range" id="set-touchopacity" min="0.3" max="1" step="0.05"></div>
+  <div class="setting touchonly"><span>Left-handed layout</span><input type="checkbox" id="set-lefty"></div>
+  <div class="setting touchonly"><span>Vibration</span><input type="checkbox" id="set-haptics"></div>
+  <div class="setting"><span>Graphics quality</span><select id="set-quality"><option value="0">Low</option><option value="1">Medium</option><option value="2">High</option></select></div>
+  <div class="setting nocodes"><span>Cheat codes (or press ` / F2)</span><button class="btn small" data-act="codes">Open</button></div>
+  <div class="setting"><span>Save file (backup / move to another device)</span><span><button class="btn small" id="set-export">Export</button> <button class="btn small" id="set-import">Import</button><input type="file" id="set-importfile" accept=".json,application/json" hidden></span></div>
+  <div class="setting"><span>Reset all progress</span><button class="btn small" id="set-reset">Reset</button></div>
+  <div class="panel-foot"><button class="btn small" data-act="back">Back</button></div>
+</div></div>
+
+<div id="howto" class="screen dim"><div class="panel">
+  <div class="panel-head"><h2>How to play</h2></div>
+  <div class="lead">Survive as long as you can. At 12:00 the Overlord arrives.</div>
+  <div class="howto">
+    <div><h3>Move &amp; Aim</h3><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrow keys to move. Your ship fires automatically toward the mouse cursor. Gamepad: left stick move, right stick aim.</div>
+    <div><h3>Dash</h3><kbd>Space</kbd> / <kbd>Shift</kbd> dashes in your movement direction and makes you invulnerable for a moment. Dash through bullets and enemy rings.</div>
+    <div><h3>Overload &amp; Ability</h3>Kills charge the Overload bar: <kbd>E</kbd> or <kbd>Right-click</kbd> unleashes a screen-clearing shockwave. <kbd>Q</kbd> fires your ship's unique ability on a cooldown.</div>
+    <div><h3>Level up &amp; evolve</h3>Collect blue gems to level up and choose 1 of 3 upgrades (<kbd>1</kbd><kbd>2</kbd><kbd>3</kbd>). Max a weapon and meet its passive requirement to unlock a gold EVOLUTION. Reroll with <kbd>R</kbd>.</div>
+    <div><h3>Combo</h3>Chain kills quickly to build a score multiplier. Getting hit halves your combo.</div>
+    <div><h3>Bosses &amp; pickups</h3>A boss appears every 3 minutes and drops a chest of epic upgrades. Watch for red warning zones. Pick up green repair, blue magnet and orange nuke crystals.</div>
+    <div><h3>Progression</h3>Every run earns Cores. Spend them on permanent upgrades and unlock new ships with different weapons and stats.</div>
+    <div><h3>Shrines &amp; arenas</h3>Touch magenta dark shrines for risky pacts. Pillars block bullets, Reactor zones burn, Collapse shrinks the arena.</div>
+    <div><h3>Touch controls</h3>Left thumb: floating move stick. Right thumb: aim stick (the ship keeps pointing where you last aimed; Settings can switch to follow-movement or auto-aim). Buttons: <b>DASH</b>, <b>SKILL</b> (ship ability) and <b>OVERLOAD</b>. Play in landscape; use "Add to Home Screen" for a full-screen app.</div>
+    <div><h3>Other</h3><kbd>Esc</kbd> / <kbd>P</kbd> pauses. Enemy bullets glow red. Yellow lines mean a dasher is about to charge. Green circles are bombs.</div>
+  </div>
+  <div class="panel-foot"><button class="btn small" data-act="back">Back</button></div>
+</div></div>
+
+<div id="levelup" class="screen dim">
+  <h1 id="lu-title">LEVEL UP</h1>
+  <div class="sub" id="lu-sub">Choose an upgrade</div>
+  <div class="choices" id="lu-choices"></div>
+  <div class="lu-foot"><button class="btn small" id="lu-reroll">Reroll [R]</button></div>
+</div>
+
+<div id="pause" class="screen dim">
+  <h1>PAUSED</h1>
+  <div class="menu-btns" style="align-items:stretch">
+    <button class="btn primary" data-act="resume">Resume</button>
+    <button class="btn" data-act="pause-settings">Settings</button>
+    <button class="btn nocodes" data-act="codes">Codes</button>
+    <button class="btn" data-act="quit">Abandon run</button>
+  </div>
+</div>
+
+<div id="gameover" class="screen dim">
+  <h1>SIGNAL LOST</h1>
+  <div class="results" id="go-results"></div>
+  <div class="earn" id="go-earn"></div>
+  <div class="row-btns">
+    <button class="btn primary" data-act="retry">Retry [Enter]</button>
+    <button class="btn" data-act="shop">Upgrades</button>
+    <button class="btn" data-act="menu">Main menu</button>
+  </div>
+</div>
+
+<div id="victory" class="screen dim">
+  <h1>VICTORY</h1>
+  <div id="vic-sub" style="letter-spacing:6px;color:#9fe;margin-top:6px">THE OVERLORD HAS FALLEN</div>
+  <div class="results" id="vic-results"></div>
+  <div class="earn" id="vic-earn"></div>
+  <div class="row-btns">
+    <button class="btn primary" data-act="endless">Continue (Endless)</button>
+    <button class="btn" data-act="finish">Bank &amp; finish</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="achbanner"></div>
+<div id="loading">LOADING…</div>
+<div id="fatal"></div>
+<script src="dist/game.js"></script>
+</body>
+</html>
