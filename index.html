@@ -422,6 +422,8 @@
 
 <div id="settings" class="screen dim"><div class="panel" style="width:min(720px,94vw)">
   <div class="panel-head"><h2>Settings</h2></div>
+  <div class="setting"><span>Master volume</span><input type="range" id="set-master" min="0" max="1" step="0.05"></div>
+  <div class="setting"><span>Mute all sound</span><input type="checkbox" id="set-muted"></div>
   <div class="setting"><span>Music</span><input type="range" id="set-music" min="0" max="1" step="0.05"></div>
   <div class="setting"><span>Sound effects</span><input type="range" id="set-sfx" min="0" max="1" step="0.05"></div>
   <div class="setting"><span>Move sensitivity</span><input type="range" id="set-movesens" min="0.3" max="1.6" step="0.05"></div>
@@ -474,6 +476,7 @@
   <h1>PAUSED</h1>
   <div class="menu-btns" style="align-items:stretch">
     <button class="btn primary" data-act="resume">Resume</button>
+    <button class="btn" data-act="toggle-mute" id="pause-mute">Sound: On</button>
     <button class="btn" data-act="pause-settings">Settings</button>
     <button class="btn nocodes" data-act="codes">Codes</button>
     <button class="btn" data-act="quit">Abandon run</button>
